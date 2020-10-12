@@ -1,0 +1,31 @@
+{
+	"name"        : "busyphp/alipay-pay",
+	"type"        : "library",
+	"description" : "",
+	"authors"     : [
+		{
+			"name"  : "busy^life",
+			"email" : "busy.life@qq.com"
+		}
+	],
+	"license"     : "Apache-2.0",
+	"require"     : {
+		"php"                 : ">=7.1.0",
+		"busyphp/busyphp"     : "^3.0",
+		"busyphp/trade"       : "^1.0",
+		"busyphp/alipay-base" : "^1.0",
+		"ext-openssl"         : "*",
+		"ext-json"            : "*"
+	},
+	"require-dev" : {
+		"symfony/var-dumper" : "^4.2"
+	},
+	"autoload"    : {
+		"psr-4" : {
+			"BusyPHP\\alipay\\pay\\" : "src"
+		}
+	},
+	"config"      : {
+		"preferred-install" : "dist"
+	}
+}
