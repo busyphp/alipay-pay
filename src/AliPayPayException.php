@@ -20,6 +20,7 @@ class AliPayPayException extends AppException
             'SubCode' => $subCode,
             'SubMsg'  => $subMsg
         ]);
-        parent::__construct($message, $code, null);
+        
+        parent::__construct("{$message}, Code: {$code}, SubMsg: {$subMsg}, SubCode: {$subCode}");
     }
 }
