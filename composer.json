@@ -2,6 +2,7 @@
 	"name"        : "busyphp/alipay-pay",
 	"type"        : "library",
 	"description" : "用于BusyPHP的支付宝支付，支持wap端、H5端、APP端、PC端支付/退款",
+	"homepage"    : "http://www.harter.cn/?form=BusyPHP&plugin=busyphp/alipay-pay",
 	"keywords"    : [
 		"alipay",
 		"支付宝"
