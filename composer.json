@@ -1,19 +1,22 @@
 {
 	"name"        : "busyphp/alipay-pay",
 	"type"        : "library",
-	"description" : "",
+	"description" : "用于BusyPHP的支付宝支付，支持wap端、H5端、APP端、PC端支付/退款",
+	"keywords"    : [
+		"alipay",
+		"支付宝"
+	],
 	"authors"     : [
 		{
 			"name"  : "busy^life",
 			"email" : "busy.life@qq.com"
 		}
 	],
-	"license"     : "Apache-2.0",
+	"license"     : "CC-BY-NC-4.0",
 	"require"     : {
 		"php"                 : ">=7.1.0",
-		"busyphp/busyphp"     : "^3.0.5",
-		"busyphp/trade"       : "^1.0.3",
-		"busyphp/alipay-base" : "^1.0",
+		"busyphp/trade"       : "^2.0",
+		"busyphp/alipay-base" : "^2.0",
 		"ext-openssl"         : "*",
 		"ext-json"            : "*"
 	},
@@ -27,5 +30,12 @@
 	},
 	"config"      : {
 		"preferred-install" : "dist"
+	},
+	"extra"       : {
+		"busyphp" : {
+			"manager" : {
+				"name" : "支付宝支付模块"
+			}
+		}
 	}
 }
