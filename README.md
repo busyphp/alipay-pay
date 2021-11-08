@@ -54,3 +54,19 @@ return [
     ]
 ];
 ```
+
+## 配置 `config/extend/trade.php`
+```php
+<?php
+use BusyPHP\alipay\pay\AliPayPay;
+use BusyPHP\trade\defines\PayType;
+
+return [
+    // 支付接口绑定
+    'apis'            => [
+        PayType::ALIPAY_PC => AliPayPay::pc(),
+        PayType::ALIPAY_H5 => AliPayPay::h5(),
+        PayType::ALIPAY_APP => AliPayPay::app(),
+    ]
+];
+```
