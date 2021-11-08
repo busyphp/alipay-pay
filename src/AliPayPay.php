@@ -3,16 +3,30 @@
 namespace BusyPHP\alipay\pay;
 
 use BusyPHP\alipay\AlipayConfig;
+use BusyPHP\alipay\pay\app\AliAppPayCreate;
+use BusyPHP\alipay\pay\app\AliAppPayNotify;
+use BusyPHP\alipay\pay\app\AliAppPayRefund;
+use BusyPHP\alipay\pay\app\AliAppPayRefundQuery;
+use BusyPHP\alipay\pay\h5\AliH5PayCreate;
+use BusyPHP\alipay\pay\h5\AliH5PayNotify;
+use BusyPHP\alipay\pay\h5\AliH5PayRefund;
+use BusyPHP\alipay\pay\h5\AliH5PayRefundQuery;
+use BusyPHP\alipay\pay\pc\AliPcPayCreate;
+use BusyPHP\alipay\pay\pc\AliPcPayNotify;
+use BusyPHP\alipay\pay\pc\AliPcPayRefund;
+use BusyPHP\alipay\pay\pc\AliPcPayRefundQuery;
 use BusyPHP\App;
-use BusyPHP\helper\net\Http;
+use BusyPHP\helper\HttpHelper;
+use BusyPHP\helper\RsaHelper;
 use BusyPHP\Request;
+use BusyPHP\trade\defines\PayType;
 use Throwable;
 
 /**
  * 支付基本类
  * @author busy^life <busy.life@qq.com>
- * @copyright (c) 2015--2019 ShanXi Han Tuo Technology Co.,Ltd. All rights reserved.
- * @version $Id: 2020/7/8 下午9:19 下午 AliPayPay.php $
+ * @copyright (c) 2015--2021 ShanXi Han Tuo Technology Co.,Ltd. All rights reserved.
+ * @version $Id: 2021/11/8 下午8:32 AliPayPay.php $
  */
 abstract class AliPayPay
 {
@@ -28,13 +42,13 @@ abstract class AliPayPay
      * 私钥文件路径
      * @var string
      */
-    protected $rsaPrivatePath;
+    protected $privateCert;
     
     /**
      * 公钥文件路径
      * @var string
      */
-    protected $rsaPublicPath;
+    protected $publicCert;
     
     /**
      * 是否RSA2加密
@@ -76,6 +90,12 @@ abstract class AliPayPay
      */
     protected $params = [];
     
+    /**
+     * 业务参数
+     * @var array
+     */
+    protected $bizContent = [];
+    
     
     /**
      * AliPayPay constructor.
@@ -85,23 +105,23 @@ abstract class AliPayPay
     {
         $name = "pay.{$this->getConfigKey()}.";
         
-        $this->app            = app();
-        $this->request        = $this->app->request;
-        $this->type           = $this->getConfig($name . 'type', '');
-        $this->appId          = $this->getConfig($name . 'app_id', '');
-        $this->email          = $this->getConfig($name . 'email', '');
-        $this->pattern        = $this->getConfig($name . 'pattern', '');
-        $this->rsaPrivatePath = $this->getConfig($name . 'rsa_private_path', '');
-        $this->rsaPublicPath  = $this->getConfig($name . 'rsa_public_path', '');
-        $this->isRsa2         = $this->getConfig($name . 'is_rsa2', true);
+        $this->app         = App::getInstance();
+        $this->request     = $this->app->request;
+        $this->type        = $this->getConfig($name . 'type', '');
+        $this->appId       = $this->getConfig($name . 'app_id', '');
+        $this->email       = $this->getConfig($name . 'email', '');
+        $this->pattern     = $this->getConfig($name . 'pattern', '');
+        $this->privateCert = $this->getConfig($name . 'rsa_private_path', '');
+        $this->publicCert  = $this->getConfig($name . 'rsa_public_path', '');
+        $this->isRsa2      = $this->getConfig($name . 'is_rsa2', true);
         
         if (!$this->appId) {
             throw new AliPayPayException('没有配置参数: app_id');
         }
-        if (!is_file($this->rsaPrivatePath)) {
+        if (!is_file($this->privateCert)) {
             throw new AliPayPayException('没有配置参数或文件不存在: rsa_private_path');
         }
-        if (!is_file($this->rsaPublicPath)) {
+        if (!is_file($this->publicCert)) {
             throw new AliPayPayException('没有配置参数或文件不存在: rsa_public_path');
         }
     }
@@ -111,7 +131,14 @@ abstract class AliPayPay
      * 获取配置名称
      * @return string
      */
-    protected abstract function getConfigKey();
+    protected abstract function getConfigKey() : string;
+    
+    
+    /**
+     * 获取接口方法
+     * @return string
+     */
+    protected abstract function getMethod() : string;
     
     
     /**
@@ -130,7 +157,7 @@ abstract class AliPayPay
         }
         
         try {
-            $result = Http::get('https://mapi.alipay.com/gateway.do', [
+            $result = HttpHelper::get('https://mapi.alipay.com/gateway.do', [
                 'service'   => 'notify_verify',
                 'partner'   => $this->pattern,
                 'notify_id' => trim($notifyId),
@@ -147,74 +174,54 @@ abstract class AliPayPay
     
     
     /**
-     * 通用RSA签名
-     * @param string $data 待签名数据
-     * @param string $path 密钥路径
-     * @param string $tagName 密钥BEGIN END名称
-     * @param bool   $isRsa2 是否RSA2
-     * @return string 签名结果
-     * @throws AliPayPayException
+     * 初始化参数
      */
-    protected static function rsaSign($data, $path, $tagName = null, $isRsa2 = false)
+    protected function initParams()
     {
-        $pemTag = !empty($tagName) ? strtoupper($tagName) : 'RSA PRIVATE';
-        $begin  = '-----BEGIN ' . $pemTag . ' KEY-----';
-        $end    = '-----END ' . $pemTag . ' KEY-----';
-        if (!is_file($path)) {
-            throw new AliPayPayException('私钥不存在: ' . $path);
-        }
+        $this->params['app_id']      = $this->appId;
+        $this->params['method']      = $this->getMethod();
+        $this->params['format']      = 'JSON';
+        $this->params['charset']     = 'utf-8';
+        $this->params['sign_type']   = $this->isRsa2 ? 'RSA2' : 'RSA';
+        $this->params['timestamp']   = date('Y-m-d H:i:s');
+        $this->params['version']     = '1.0';
+        $this->params['biz_content'] = json_encode($this->bizContent, JSON_UNESCAPED_UNICODE);
         
-        $secret = file_get_contents($path);
-        $secret = str_replace($begin, '', $secret);
-        $secret = str_replace($end, '', $secret);
-        $secret = str_replace("\n", '', $secret);
-        $secret = $begin . "\n" . wordwrap($secret, 64, "\n", true) . "\n" . $end;
-        
-        $resource = openssl_get_privatekey($secret);
-        if (!$resource) {
-            throw new AliPayPayException('私钥不正确');
-        }
-        
-        openssl_sign($data, $sign, $resource, $isRsa2 ? OPENSSL_ALGO_SHA256 : OPENSSL_ALGO_SHA1);
-        openssl_free_key($resource);
-        
-        return base64_encode($sign);
+        // 签名
+        $this->params['sign'] = RsaHelper::sign(self::temp($this->params, 'sign'), $this->privateCert, true, $this->isRsa2);
     }
     
     
     /**
-     * 通用RSA验签
-     * @param string $data 待签名数据
-     * @param string $sign 要校对的的签名结果
-     * @param string $path 公钥文件路径
-     * @param string $tagName 密钥BEGIN END名称
-     * @param bool   $isRsa2 是否RSA2
-     * @throws AliPayPayException
+     * 执行请求
+     * @param string $responseKey
+     * @return array
      */
-    protected static function checkRsaSign($data, $sign, $path, $tagName = null, $isRsa2 = false)
+    protected function execute(string $responseKey = '') : array
     {
-        $tagName = !empty($tagName) ? strtoupper($tagName) : 'PUBLIC';
-        $begin   = '-----BEGIN ' . $tagName . ' KEY-----';
-        $end     = '-----END ' . $tagName . ' KEY-----';
-        
-        if (!is_file($path)) {
-            throw new AliPayPayException('公钥不存在: ' . $path);
-        }
-        $secret   = file_get_contents($path);
-        $secret   = str_replace($begin, '', $secret);
-        $secret   = str_replace($end, '', $secret);
-        $secret   = str_replace("\n", "", $secret);
-        $secret   = $begin . "\n" . wordwrap($secret, 64, "\n", true) . "\n" . $end;
-        $resource = $isRsa2 ? openssl_pkey_get_public($secret) : openssl_get_publickey($secret);
-        if (!$resource) {
-            throw new AliPayPayException('公钥格式不正确!');
+        $this->initParams();
+        try {
+            $result = HttpHelper::get('https://openapi.alipay.com/gateway.do', $this->params);
+        } catch (Throwable $e) {
+            throw new AliPayPayException("HTTP请求失败: {$e->getMessage()} [{$e->getCode()}]");
         }
         
-        $result = openssl_verify($data, base64_decode($sign), $resource, $isRsa2 ? OPENSSL_ALGO_SHA256 : OPENSSL_ALGO_SHA1);
-        openssl_free_key($resource);
-        if ($result != 1) {
-            throw new AliPayPayException('RAS签名校验错误');
+        $result = json_decode($result, true) ?: [];
+        if ($responseKey) {
+            $result         = $result[$responseKey] ?? [];
+            $result['code'] = intval($result['code'] ?? 0);
+            $result['msg']  = trim((string) ($result['msg'] ?? ''));
+            
+            if ($result['code'] != 10000) {
+                $result['sub_msg']  = trim((string) $result['sub_msg'] ?? '');
+                $result['sub_code'] = trim((string) ($result['sub_code'] ?? ''));
+                throw new AliPayPayException($result['msg'], $result['code'], $result['sub_msg'], $result['sub_code']);
+            }
+            
+            return $result;
         }
+        
+        return $result;
     }
     
     
@@ -224,7 +231,7 @@ abstract class AliPayPay
      * @param string|array $filterKeys 要过滤的键名称，多个用逗号隔开
      * @return string 签名
      */
-    protected static function createSignTemp($params, $filterKeys = '')
+    protected static function temp($params, $filterKeys = '')
     {
         if (!is_array($filterKeys)) {
             $filterKeys = explode(',', $filterKeys);
@@ -248,5 +255,71 @@ abstract class AliPayPay
         }
         
         return implode('&', $query);
+    }
+    
+    
+    /**
+     * 获取支付宝PC端接口配置
+     * @param string $name 名称
+     * @param string $alias 别名
+     * @param int    $client 客户端类型
+     * @return array
+     */
+    public static function pc(?string $name = null, ?string $alias = null, ?int $client = null) : array
+    {
+        return [
+            'name'          => $name ?? '支付宝网页支付',
+            'alias'         => $alias ?? '支付宝',
+            'client'        => $client ?? PayType::CLIENT_ALIPAY,
+            'create'        => AliPcPayCreate::class,
+            'notify'        => AliPcPayNotify::class,
+            'refund'        => AliPcPayRefund::class,
+            'refund_notify' => '',
+            'refund_query'  => AliPcPayRefundQuery::class,
+        ];
+    }
+    
+    
+    /**
+     * 获取支付宝H5端接口配置
+     * @param string $name 名称
+     * @param string $alias 别名
+     * @param int    $client 客户端类型
+     * @return array
+     */
+    public static function h5(?string $name = null, ?string $alias = null, ?int $client = null) : array
+    {
+        return [
+            'name'          => $name ?? '支付宝H5支付',
+            'alias'         => $alias ?? '支付宝',
+            'client'        => $client ?? PayType::CLIENT_ALIPAY,
+            'create'        => AliH5PayCreate::class,
+            'notify'        => AliH5PayNotify::class,
+            'refund'        => AliH5PayRefund::class,
+            'refund_notify' => '',
+            'refund_query'  => AliH5PayRefundQuery::class,
+        ];
+    }
+    
+    
+    /**
+     * 获取支付宝APP端接口配置
+     * @param string $name 名称
+     * @param string $alias 别名
+     * @param int    $client 客户端类型
+     * @return array
+     */
+    public static function app(?string $name = null, ?string $alias = null, ?int $client = null) : array
+    {
+        return [
+            'name'          => $name ?? '支付宝APP支付',
+            'alias'         => $alias ?? '支付宝',
+            'client'        => $client ?? PayType::CLIENT_ALIPAY,
+            'create'        => AliAppPayCreate::class,
+            'notify'        => AliAppPayNotify::class,
+            'refund'        => AliAppPayRefund::class,
+            'refund_notify' => '',
+            'refund_query'  => AliAppPayRefundQuery::class,
+        ];
     }
 }

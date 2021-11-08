@@ -2,39 +2,28 @@
 
 namespace BusyPHP\alipay\pay;
 
-use BusyPHP\helper\net\Http;
 use BusyPHP\trade\interfaces\PayRefundNotifyResult;
 use BusyPHP\trade\interfaces\PayRefundQuery;
+use BusyPHP\trade\interfaces\PayRefundQueryResult;
 use BusyPHP\trade\model\refund\TradeRefundField;
 use Exception;
 
 /**
  * 统一收单交易退款查询
  * @author busy^life <busy.life@qq.com>
- * @copyright (c) 2015--2019 ShanXi Han Tuo Technology Co.,Ltd. All rights reserved.
- * @version $Id: 2020/7/8 下午8:34 下午 AliPayRefund.php $
+ * @copyright (c) 2015--2021 ShanXi Han Tuo Technology Co.,Ltd. All rights reserved.
+ * @version $Id: 2021/11/8 下午10:19 AliPayRefundQuery.php $
  * @see https://opendocs.alipay.com/apis/api_1/alipay.trade.fastpay.refund.query
  */
 abstract class AliPayRefundQuery extends AliPayPay implements PayRefundQuery
 {
-    protected $bizContent = [];
-    
-    
     /**
-     * AliPayRefund constructor.
-     * @throws AliPayPayException
+     * 获取接口方法
+     * @return string
      */
-    public function __construct()
+    protected function getMethod() : string
     {
-        parent::__construct();
-        
-        $this->params['app_id']    = $this->appId;
-        $this->params['method']    = 'alipay.trade.fastpay.refund.query';
-        $this->params['format']    = 'JSON';
-        $this->params['charset']   = 'utf-8';
-        $this->params['sign_type'] = $this->isRsa2 ? 'RSA2' : 'RSA';
-        $this->params['timestamp'] = date('Y-m-d H:i:s');
-        $this->params['version']   = '1.0';
+        return 'alipay.trade.fastpay.refund.query';
     }
     
     
@@ -52,37 +41,61 @@ abstract class AliPayRefundQuery extends AliPayPay implements PayRefundQuery
     
     /**
      * 执行查询
-     * @return PayRefundNotifyResult
-     * @throws AliPayPayException
+     * @return PayRefundQueryResult
+     * @throws Exception
      */
-    public function query() : PayRefundNotifyResult
+    public function query() : PayRefundQueryResult
     {
-        $this->params['biz_content'] = json_encode($this->bizContent, JSON_UNESCAPED_UNICODE);
-        $this->params['sign']        = self::rsaSign(self::createSignTemp($this->params, 'sign'), $this->rsaPrivatePath, '', $this->isRsa2);
+        // 构建返回参数
+        $notifyResult = new PayRefundNotifyResult();
+        $res          = new PayRefundQueryResult($notifyResult);
         
         try {
-            $result = Http::get('https://openapi.alipay.com/gateway.do', $this->params);
-        } catch (Exception $e) {
-            throw new AliPayPayException("HTTP请求失败: {$e->getMessage()} [{$e->getCode()}]");
-        }
-        
-        
-        $result = json_decode($result, true);
-        $result = $result['alipay_trade_fastpay_refund_query_response'];
-        if ($result['code'] != '10000') {
-            throw new AliPayPayException($result['msg'], $result['code'], $result['sub_msg'], $result['sub_code']);
-        }
-        
-        $res = new PayRefundNotifyResult();
-        $res->setStatus(true);
-        $res->setPayApiTradeNo($result['trade_no']);
-        $res->setPayTradeNo($result['out_trade_no']);
-        $res->setRefundNo($result['out_request_no']);
-        
-        // 退入账户
-        $refundRoyaltys = $result['refund_royaltys'] ?? false;
-        if ($refundRoyaltys) {
-            $res->setRefundAccount($refundRoyaltys['trans_in_email'] ?? '');
+            $result = $this->execute('alipay_trade_fastpay_refund_query_response');
+            
+            // 如何判断退款是否成功
+            // http://forum.alipay.com/mini-app/post/22901012#reply_23200027
+            // https://opensupport.alipay.com/support/helpcenter/193/201602484962#anchor__3
+            // 根据以上指引说明，只要返回 out_trade_no、trade_no或refund_amount 就是退款成功
+            // 如果接口没有查询到具体的退款信息则代表未退款成功，可以调用退款接口进行重试。重试时请务必保证退款请求号out_request_no以及请求参数一致。
+            $result['out_trade_no']   = $result['out_trade_no'] ?? null;
+            $result['trade_no']       = $result['trade_no'] ?? null;
+            $result['refund_amount']  = $result['refund_amount'] ?? null;
+            $result['out_request_no'] = $result['out_request_no'] ?? null;
+            if (!$result['trade_no'] || !$result['out_trade_no'] || !$result['refund_amount'] || !$result['out_request_no']) {
+                $notifyResult->setNeedReHandle(true);
+                $notifyResult->setErrMsg('返回参数为空: ' . implode(',', [
+                        $result['trade_no'],
+                        $result['out_trade_no'],
+                        $result['refund_amount'],
+                        $result['out_request_no'],
+                    ]));
+            } else {
+                $notifyResult->setNeedReHandle(false);
+                $notifyResult->setStatus(true);
+                $notifyResult->setPayApiTradeNo($result['trade_no']);
+                $notifyResult->setPayTradeNo($result['out_trade_no']);
+                $notifyResult->setRefundNo($result['out_request_no']);
+                
+                // 退入账户
+                $refundRoyaltys = $result['refund_royaltys'] ?? [];
+                if ($refundRoyaltys) {
+                    $notifyResult->setRefundAccount($refundRoyaltys['trans_in_email'] ?? '');
+                }
+                
+                foreach ($result as $key => $item) {
+                    $res->addDetail($key, $item);
+                }
+            }
+        } catch (AliPayPayException $e) {
+            // 重新发起查询请求，如果多次重试后还是返回系统错误，请联系支付宝小二处理
+            // https://opendocs.alipay.com/apis/api_1/alipay.trade.fastpay.refund.query#%E4%B8%9A%E5%8A%A1%E9%94%99%E8%AF%AF%E7%A0%81
+            if ($e->getSubCode() === 'ACQ.SYSTEM_ERROR') {
+                $notifyResult->setNeedReHandle(true);
+                $notifyResult->setErrMsg($e->getMessage());
+            } else {
+                throw $e;
+            }
         }
         
         return $res;

@@ -1,19 +1,19 @@
 <?php
 
-namespace BusyPHP\alipay\pay\pc;
+namespace BusyPHP\alipay\pay\h5;
 
 use BusyPHP\alipay\pay\AliPayCreate;
 
 /**
- * PC场景下单并支付
+ * 手机网站支付接口
  * @author busy^life <busy.life@qq.com>
  * @copyright (c) 2015--2021 ShanXi Han Tuo Technology Co.,Ltd. All rights reserved.
- * @version $Id: 2021/11/8 下午10:20 AliPcPayCreate.php $
- * @see https://docs.open.alipay.com/270/105899/
+ * @version $Id: 2021/11/8 下午10:42 AliWapPayCreate.php $
+ * @see https://docs.open.alipay.com/203/107090/
  */
-class AliPcPayCreate extends AliPayCreate
+class AliH5PayCreate extends AliPayCreate
 {
-    protected $productCode = 'FAST_INSTANT_TRADE_PAY';
+    protected $productCode = 'QUICK_WAP_WAY';
     
     
     /**
@@ -22,7 +22,7 @@ class AliPcPayCreate extends AliPayCreate
      */
     protected function getConfigKey() : string
     {
-        return 'pc';
+        return 'h5';
     }
     
     
@@ -32,7 +32,7 @@ class AliPcPayCreate extends AliPayCreate
      */
     protected function getMethod() : string
     {
-        return 'alipay.trade.page.pay';
+        return 'alipay.trade.wap.pay';
     }
     
     
@@ -42,6 +42,16 @@ class AliPcPayCreate extends AliPayCreate
      */
     public function setReturnUrl(string $returnUrl)
     {
-        $this->params['return_url'] = $returnUrl;
+        $this->params['return_url'] = trim($returnUrl);
+    }
+    
+    
+    /**
+     * 设置商品展示地址
+     * @param string $showUrl
+     */
+    public function setShowUrl(string $showUrl)
+    {
+        $this->bizContent['quit_url'] = trim($showUrl);
     }
 }

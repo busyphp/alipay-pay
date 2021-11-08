@@ -1,44 +1,41 @@
 <?php
 
-namespace BusyPHP\alipay\pay\h5;
+namespace BusyPHP\alipay\pay;
 
-use BusyPHP\alipay\pay\AliPayPay;
-use BusyPHP\alipay\pay\AliPayPayException;
+use BusyPHP\helper\RsaHelper;
 use BusyPHP\trade\interfaces\PayNotify;
 use BusyPHP\trade\interfaces\PayNotifyResult;
 use think\Response;
 use Throwable;
 
 /**
- * 手机网站支付结果异步通知
+ * 支付结果异步通知
  * @author busy^life <busy.life@qq.com>
  * @copyright (c) 2015--2018 ShanXi Han Tuo Technology Co.,Ltd. All rights reserved.
- * @version $Id: 2018-06-06 上午10:13 AliWapPayNotify.php $
- * @see https://docs.open.alipay.com/203/105286/
+ * @version $Id: 2018-06-06 上午10:13 AliAppPayNotify.php $
+ * @see https://docs.open.alipay.com/204/105301/
  */
-class AliWapPayNotify extends AliPayPay implements PayNotify
+abstract class AliPayNotify extends AliPayPay implements PayNotify
 {
-    protected $params  = [];
-    
-    private   $tradeNo = '';
+    private $payTradeNo;
     
     
     public function __construct()
     {
         parent::__construct();
         
-        $this->params  = $_POST;
-        $this->tradeNo = $this->params['out_trade_no'];
+        $this->params     = $this->request->post();
+        $this->payTradeNo = $this->params['out_trade_no'] ?? '';
     }
     
     
     /**
-     * 获取配置名称
+     * 获取接口方法
      * @return string
      */
-    protected function getConfigKey()
+    protected function getMethod() : string
     {
-        return 'h5';
+        return '';
     }
     
     
@@ -47,26 +44,33 @@ class AliWapPayNotify extends AliPayPay implements PayNotify
      * @return PayNotifyResult
      * @throws AliPayPayException
      */
-    public function notify()
+    public function notify() : PayNotifyResult
     {
         // 交易状态不合法
-        if ($this->params['trade_status'] != 'TRADE_SUCCESS') {
+        if (($this->params['trade_status'] ?? '') != 'TRADE_SUCCESS' && ($this->params['trade_status'] ?? '') != 'TRADE_FINISHED') {
             throw new AliPayPayException("交易状态不合法");
         }
         
         // 校验签名
         try {
-            self::checkRsaSign(self::createSignTemp($this->params, 'sign,sign_type'), $this->params['sign'], $this->rsaPublicPath, '', strtoupper($this->params['sign_type']) == 'RSA2');
+            $temp   = self::temp($this->params, 'sign,sign_type');
+            $sign   = $this->params['sign'] ?? '';
+            $isRsa2 = strtoupper($this->params['sign_type'] ?? '') === 'RSA2';
+            RsaHelper::verify($temp, $sign, $this->publicCert, true, $isRsa2);
         } catch (Throwable $e) {
-            throw new AliPayPayException('签名校验失败');
+            throw new AliPayPayException('签名校验失败', 0, '', '', $e);
         }
         
+        
+        // 验证ANT结果
+        $this->verifyNotify($this->params['notify_id']);
+        
         $res = new PayNotifyResult();
-        $res->setAttach($this->params['passback_params']);
-        $res->setPayTradeNo($this->tradeNo);
-        $res->setApiPrice($this->params['total_amount']);
+        $res->setAttach($this->params['passback_params'] ?? '');
+        $res->setPayTradeNo($this->payTradeNo);
+        $res->setApiPrice(floatval($this->params['total_amount'] ?? 0));
         $res->setPayType($this->type);
-        $res->setApiTradeNo($this->params['trade_no']);
+        $res->setApiTradeNo($this->params['trade_no'] ?? '');
         
         return $res;
     }
@@ -98,17 +102,17 @@ class AliWapPayNotify extends AliPayPay implements PayNotify
      * 获取请求参数
      * @return array
      */
-    public function getRequestParams()
+    public function getRequestParams() : array
     {
         return $this->params;
     }
     
     
     /**
-     * 获取请求参数字符
+     * 获取源请求参数
      * @return string
      */
-    public function getRequestString()
+    public function getRequestSourceParams() : string
     {
         return http_build_query($this->params);
     }
@@ -120,6 +124,6 @@ class AliWapPayNotify extends AliPayPay implements PayNotify
      */
     public function getPayTradeNo()
     {
-        return $this->tradeNo;
+        return $this->payTradeNo;
     }
 }
