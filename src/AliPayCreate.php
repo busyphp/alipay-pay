@@ -36,9 +36,10 @@ abstract class AliPayCreate extends AliPayPay implements PayCreate
      */
     public function setTradeInfo(TradePayInfo $tradeInfo)
     {
-        $this->bizContent['out_trade_no'] = $tradeInfo->payTradeNo;
-        $this->bizContent['total_amount'] = $tradeInfo->price;
-        $this->bizContent['subject']      = $tradeInfo->title;
+        $this->bizContent['out_trade_no']    = $tradeInfo->payTradeNo;
+        $this->bizContent['total_amount']    = $tradeInfo->price;
+        $this->bizContent['subject']         = $tradeInfo->title;
+        $this->bizContent['timeout_express'] = floor(($tradeInfo->invalidTime - $tradeInfo->createTime) / 60) . 'm';
     }
     
     
@@ -88,13 +89,13 @@ abstract class AliPayCreate extends AliPayPay implements PayCreate
     public function create()
     {
         $this->bizContent['product_code'] = $this->productCode;
-    
+        
         $this->initParams();
-    
+        
         if ($this->buildUrlIsOnlyQuery) {
             return http_build_query($this->params);
         }
-    
+        
         return "https://openapi.alipay.com/gateway.do?" . http_build_query($this->params);
     }
     
