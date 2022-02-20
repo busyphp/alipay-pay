@@ -2,7 +2,6 @@
 
 namespace BusyPHP\alipay\pay;
 
-use BusyPHP\alipay\AlipayConfig;
 use BusyPHP\alipay\pay\app\AliAppPayCreate;
 use BusyPHP\alipay\pay\app\AliAppPayNotify;
 use BusyPHP\alipay\pay\app\AliAppPayRefund;
@@ -15,6 +14,7 @@ use BusyPHP\alipay\pay\pc\AliPcPayCreate;
 use BusyPHP\alipay\pay\pc\AliPcPayNotify;
 use BusyPHP\alipay\pay\pc\AliPcPayRefund;
 use BusyPHP\alipay\pay\pc\AliPcPayRefundQuery;
+use BusyPHP\alipay\WithAlipayConfig;
 use BusyPHP\App;
 use BusyPHP\helper\HttpHelper;
 use BusyPHP\helper\RsaHelper;
@@ -30,7 +30,7 @@ use Throwable;
  */
 abstract class AliPayPay
 {
-    use AlipayConfig;
+    use WithAlipayConfig;
     
     /**
      * AppId
@@ -107,13 +107,13 @@ abstract class AliPayPay
         
         $this->app         = App::getInstance();
         $this->request     = $this->app->request;
-        $this->type        = $this->getConfig($name . 'type', '');
-        $this->appId       = $this->getConfig($name . 'app_id', '');
-        $this->email       = $this->getConfig($name . 'email', '');
-        $this->pattern     = $this->getConfig($name . 'pattern', '');
-        $this->privateCert = $this->getConfig($name . 'rsa_private_path', '');
-        $this->publicCert  = $this->getConfig($name . 'rsa_public_path', '');
-        $this->isRsa2      = $this->getConfig($name . 'is_rsa2', true);
+        $this->type        = $this->getAlipayConfig($name . 'type', '');
+        $this->appId       = $this->getAlipayConfig($name . 'app_id', '');
+        $this->email       = $this->getAlipayConfig($name . 'email', '');
+        $this->pattern     = $this->getAlipayConfig($name . 'pattern', '');
+        $this->privateCert = $this->getAlipayConfig($name . 'rsa_private_path', '');
+        $this->publicCert  = $this->getAlipayConfig($name . 'rsa_public_path', '');
+        $this->isRsa2      = $this->getAlipayConfig($name . 'is_rsa2', true);
         
         if (!$this->appId) {
             throw new AliPayPayException('没有配置参数: app_id');

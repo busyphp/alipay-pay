@@ -15,10 +15,9 @@
 	],
 	"license"     : "CC-BY-NC-4.0",
 	"require"     : {
-		"php"                 : ">=7.1.0",
+		"ext-json"            : "*",
 		"busyphp/trade"       : "^2.0",
-		"busyphp/alipay-base" : "^2.0",
-		"ext-json"            : "*"
+		"busyphp/alipay-base" : "^2.0"
 	},
 	"require-dev" : {
 		"symfony/var-dumper" : "^4.2"
@@ -32,7 +31,10 @@
 		"preferred-install" : "dist"
 	},
 	"extra"       : {
-		"busyphp" : {
+		"branch-alias" : {
+			"dev-master" : "2.0.x-dev"
+		},
+		"busyphp"      : {
 			"manager" : {
 				"name" : "支付宝支付模块"
 			}
